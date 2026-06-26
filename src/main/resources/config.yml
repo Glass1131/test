@@ -1,0 +1,54 @@
+# Zombie Survival Plugin Configuration
+
+# 라운드 설정
+round:
+  preparation-time-seconds: 30
+  end-delay-ticks: 40
+
+# 몹 스폰 설정
+spawn:
+  zombies-per-round: 20
+  interval-ticks: 10
+  health-increase:
+    per-10-rounds: 3
+    every-x-rounds: 10
+
+# 스케줄러 간격 설정
+intervals:
+  zombie-count-update-ticks: 20
+  zombie-chase-ticks: 200
+  biome-check-ticks: 5
+  actionbar-update-ticks: 20
+
+# 바이옴별 설정
+biomes:
+  default:
+    spawn-coords: [-258, -341, 80, 14]
+    spawn-probabilities:
+      ZOMBIE: 1.0
+
+  deep_dark:
+    spawn-coords: [-258, -341, 80, 14]
+    spawn-probabilities:
+      ZOMBIE: 0.7
+      ZOMBIE_VILLAGER: 0.3
+
+  desert:
+    spawn-coords: [-100, -200, 80, 50]
+    spawn-probabilities:
+      HUSK: 0.8
+      ZOMBIE: 0.2
+
+  # [늪지대 설정]
+  swamp:
+    spawn-coords: [-150, -250, 70, 30]
+    spawn-probabilities:
+      BOGGED: 0.4      # 보그드
+      SLIME: 0.3       # 슬라임
+      WITCH: 0.1       # 일반 마녀
+      # [수정] 좀비(0.1)와 좀비 주민(0.05)으로 분리하여 주민 비율을 낮춤
+      ZOMBIE: 0.15
+      ZOMBIE_VILLAGER: 0.05
+
+    oxygen-start-round: 30
+    boss-round-interval: 10

@@ -1,0 +1,18 @@
+name: test
+version: '1.0-SNAPSHOT'
+main: test1.MyPlugin
+api-version: '1.21'
+
+commands:
+  zombie:
+    description: "좀비 서바이벌 관리자 통합 명령어"
+    usage: "/zombie <start|stop|item|system|round|skip|party|mob|summon|region|biome|status|setaltar|testchance>"
+    # permission: "plugin.zombie"  <-- 삭제 또는 주석 처리 (권한 없이도 명령어 자체는 입력 가능해야 함)
+
+permissions:
+  plugin.zombie:
+    description: "좀비 플러그인 관리자 권한"
+    default: op
+  customize.use:
+    description: "커스텀 아이템 명령어 사용 권한"
+    default: true # [중요] true로 설정하여 누구나 /zombie item list 접근 가능하게 함
