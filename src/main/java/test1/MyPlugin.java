@@ -55,7 +55,6 @@ public class MyPlugin extends JavaPlugin implements Listener {
     public static final String WORLD_NOT_FOUND_WARNING = "월드 '" + GAME_WORLD_NAME + "'를 찾을 수 없습니다! 몹을 소환할 수 없습니다.";
 
     private GameManager gameManager;
-    private GameScoreboard gameScoreboard;
     private PartyManager partyManager;
 
     private ThirstSystem thirstSystem;
@@ -90,7 +89,7 @@ public class MyPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        getLogger().info("✅ 플러그인이 활성화되었습니다! (Package: test1)");
+        getLogger().info("플러그인 활성화 (Package: test1)");
         saveDefaultConfig();
         loadConfigValues();
         initializeSystems();
@@ -163,7 +162,7 @@ public class MyPlugin extends JavaPlugin implements Listener {
     }
 
     private void initializeSystems() {
-        gameScoreboard = new GameScoreboard();
+        GameScoreboard gameScoreboard = new GameScoreboard();
         gameManager = new GameManager(this, gameScoreboard);
         partyManager = new PartyManager();
         thirstSystem = new ThirstSystem(this);
@@ -178,13 +177,15 @@ public class MyPlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this, this);
         getServer().getPluginManager().registerEvents(new Swamp(), this);
         getServer().getPluginManager().registerEvents(new Weaponability(this), this);
-        getServer().getPluginManager().registerEvents(bossListener, this); // [변경] 등록된 인스턴스 사용
+        getServer().getPluginManager().registerEvents(bossListener, this);
         getServer().getPluginManager().registerEvents(spearZombie, this);
         getServer().getPluginManager().registerEvents(new ItemEventListener(this), this);
+        getServer().getPluginManager().registerEvents(new test1.party.PlayerPartyGUI(), this);
+        getServer().getPluginManager().registerEvents(new test1.party.AdminPartyGUI(), this);
     }
 
     private void registerCommands() {
-        CustomCommand customCommandHandler = new CustomCommand(this, gameManager, partyManager);
+        CustomCommand customCommandHandler = new CustomCommand(this, gameManager);
 
         Objects.requireNonNull(getCommand("zombie")).setExecutor(customCommandHandler);
         Objects.requireNonNull(getCommand("zombie")).setTabCompleter(customCommandHandler);

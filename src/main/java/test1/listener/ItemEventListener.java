@@ -1,205 +1,69 @@
 package test1.listener;
 
 import test1.MyPlugin;
-import test1.item.CustomItem;
+import test1.party.Party;
+import test1.party.PartyManager;
+import test1.party.PlayerPartyGUI;
+import test1.command.CustomCommand;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
-import org.bukkit.Sound;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Zombie;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.Objects;
 
 public class ItemEventListener implements Listener {
 
-    private final MyPlugin plugin;
-    private final Random random = new Random();
-
     public ItemEventListener(MyPlugin plugin) {
-        this.plugin = plugin;
     }
 
-    // 게임 진행 여부 확인 메서드
-    private boolean isGameRunning() {
-        return plugin.getGameManager() != null && plugin.getGameManager().isGameInProgress();
-    }
-
-    // 우클릭 섭취 (먹을 수 없는 아이템)
+    // [신규 로직] 파티 신호기 우클릭 감지
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-
         Player player = event.getPlayer();
-
-        // [수정] 게임 중이 아니더라도 OP는 테스트 가능하도록 허용
-        if (!isGameRunning() && !player.isOp()) {
-            return;
-        }
-
-        ItemStack item = player.getInventory().getItemInMainHand();
-
-        if (item.getType() == Material.AIR) return;
-
-        // 영생하는 자 (네더의 별) - 버프 사용
-        if (item.isSimilar(CustomItem.IMMORTAL_ONE)) {
-            consumeItem(player, item);
-            player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, PotionEffect.INFINITE_DURATION, 1));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SATURATION, PotionEffect.INFINITE_DURATION, 0));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, PotionEffect.INFINITE_DURATION, 0));
-            player.sendMessage(Component.text("영생하는 자를 섭취하여 무한한 힘을 얻었습니다!", NamedTextColor.AQUA));
-            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_BURP, 1.0f, 1.0f);
-            return;
-        }
-
-        // 좀비 토금 (금 조각)
-        if (item.isSimilar(CustomItem.ZOMBIE_GOLD_NUGGET)) {
-            consumeItem(player, item);
-            player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 20 * 10, 0));
-            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_BURP, 1.0f, 1.0f);
-            return;
-        }
-
-        // 좀비의 흔적 (자수정 조각)
-        if (item.isSimilar(CustomItem.ZOMBIE_TRACE)) {
-            consumeItem(player, item);
-            player.addPotionEffect(new PotionEffect(PotionEffectType.INSTANT_HEALTH, 1, 1));
-            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_BURP, 1.0f, 1.0f);
-        }
-    }
-
-    // 섭취 이벤트 (먹을 수 있는 아이템)
-    @EventHandler
-    public void onPlayerConsume(PlayerItemConsumeEvent event) {
-        Player player = event.getPlayer();
-
-        // [수정] 게임 중이 아니더라도 OP는 테스트 가능하도록 허용
-        if (!isGameRunning() && !player.isOp()) {
-            return;
-        }
-
         ItemStack item = event.getItem();
 
-        // 좀비 사과
-        if (item.isSimilar(CustomItem.ZOMBIE_APPLE)) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SATURATION, 20, 1));
+        if (item == null || item.getType() == Material.AIR) return;
 
-            // 0.0015% 확률로 감염 (사망 처리로 트리거)
-            if (random.nextDouble() < 0.000015) {
-                player.setHealth(0);
-                player.sendMessage(Component.text("☣ 오염된 사과를 먹고 감염되었습니다!", NamedTextColor.DARK_GREEN));
-            }
-        }
-        else if (item.isSimilar(CustomItem.GOLDEN_APPLE_CUSTOM)) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 20 * 10, 1));
-        }
-        // 수상한 물약 (흉조 제거)
-        else if (item.isSimilar(CustomItem.SUSPICIOUS_POTION)) {
-            if (player.hasPotionEffect(PotionEffectType.BAD_OMEN)) {
-                player.removePotionEffect(PotionEffectType.BAD_OMEN);
-                player.sendMessage(Component.text("흉조의 기운이 사라졌습니다.", NamedTextColor.GREEN));
-                player.playSound(player.getLocation(), Sound.ENTITY_WITCH_DRINK, 1.0f, 1.0f);
-            }
-        }
-    }
+        if (event.getAction().isRightClick() && item.getType() == Material.BEACON) {
+            if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
+                String name = PlainTextComponentSerializer.plainText().serialize(Objects.requireNonNull(item.getItemMeta().displayName()));
 
-    // 타격 패시브 (영생하는 자)
-    @EventHandler
-    public void onPlayerAttackZombie(EntityDamageByEntityEvent event) {
-        if (!(event.getDamager() instanceof Player attacker) || !(event.getEntity() instanceof Zombie)) {
-            return;
-        }
+                if (name.contains("파티")) {
+                    event.setCancelled(true); // 블록 설치 방어
 
-        // [수정] 게임 중이 아니더라도 OP는 테스트 가능하도록 허용
-        if (!isGameRunning() && !attacker.isOp()) {
-            return;
-        }
-
-        if (!attacker.getInventory().containsAtLeast(CustomItem.IMMORTAL_ONE, 1)) {
-            return;
-        }
-
-        // 테스트 모드일 경우 확률 100%로 적용
-        double chance = 0.15; // 기본 15%
-        if (plugin.isProbabilityTestMode()) {
-            chance = 1.0; // 테스트 모드 ON -> 100%
-            attacker.sendMessage(Component.text("[TestMode] 영생하는 자 효과 발동 (100%)", NamedTextColor.GRAY));
-        }
-
-        if (random.nextDouble() > chance) return;
-
-        List<Player> nearbyPlayers = new ArrayList<>();
-        nearbyPlayers.add(attacker);
-        for (Entity e : attacker.getNearbyEntities(3, 3, 3)) {
-            if (e instanceof Player p && !p.equals(attacker)) {
-                nearbyPlayers.add(p);
-            }
-        }
-
-        int holderCount = 0;
-        for (Player p : nearbyPlayers) {
-            if (p.getInventory().containsAtLeast(CustomItem.IMMORTAL_ONE, 1)) {
-                holderCount++;
-            }
-        }
-        boolean shareEffect = (holderCount >= 2);
-
-        PotionEffectType[] effects = {
-                PotionEffectType.INSTANT_HEALTH,
-                PotionEffectType.RESISTANCE,
-                PotionEffectType.REGENERATION,
-                PotionEffectType.SPEED
-        };
-        PotionEffectType selectedType = effects[random.nextInt(effects.length)];
-
-        int baseDuration = 20 * 10;
-        int baseAmp = 0;
-
-        if (selectedType == PotionEffectType.INSTANT_HEALTH) {
-            baseDuration = 1;
-            baseAmp = 1;
-        } else if (selectedType == PotionEffectType.RESISTANCE) {
-            baseDuration = 20 * 105;
-        } else if (selectedType == PotionEffectType.REGENERATION) {
-            baseDuration = 20 * 60;
-        } else if (selectedType == PotionEffectType.SPEED) {
-            baseDuration = 20 * 120;
-        }
-
-        for (Player target : nearbyPlayers) {
-            boolean isHolder = target.getInventory().containsAtLeast(CustomItem.IMMORTAL_ONE, 1);
-
-            if (!shareEffect && !isHolder) continue;
-
-            int finalAmp = baseAmp;
-            if (isHolder && selectedType != PotionEffectType.INSTANT_HEALTH) {
-                PotionEffect existing = target.getPotionEffect(selectedType);
-                if (existing != null) {
-                    finalAmp = Math.min(2, existing.getAmplifier() + 1);
+                    Party party = PartyManager.getInstance().getPartyByPlayer(player.getUniqueId());
+                    if (party == null) {
+                        PlayerPartyGUI.openListGUI(player);
+                    } else {
+                        PlayerPartyGUI.openManageGUI(player);
+                    }
                 }
             }
-
-            target.addPotionEffect(new PotionEffect(selectedType, baseDuration, finalAmp, false, true));
         }
-
-        attacker.getWorld().spawnParticle(org.bukkit.Particle.COMPOSTER, attacker.getLocation(), 10, 0.5, 1, 0.5);
     }
 
-    private void consumeItem(Player player, ItemStack item) {
-        if (player.getGameMode() != org.bukkit.GameMode.CREATIVE) {
-            item.setAmount(item.getAmount() - 1);
+    // [신규 로직] 잠긴 유저가 파티 아이템을 버리는 행위(Q키) 완벽 차단
+    @EventHandler
+    public void onItemDrop(PlayerDropItemEvent event) {
+        Player player = event.getPlayer();
+        ItemStack item = event.getItemDrop().getItemStack();
+
+        // CustomCommand에 정의해둔 lockedPlayers에 속해있는지 검사
+        if (CustomCommand.lockedPlayers.contains(player.getUniqueId())) {
+            if (item.getType() == Material.BEACON && item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
+                String name = PlainTextComponentSerializer.plainText().serialize(Objects.requireNonNull(item.getItemMeta().displayName()));
+                if (name.contains("파티")) {
+                    event.setCancelled(true);
+                    player.sendMessage(Component.text("관리자에 의해 파티 아이템이 잠겨있어 버릴 수 없습니다.", NamedTextColor.RED));
+                }
+            }
         }
     }
 }

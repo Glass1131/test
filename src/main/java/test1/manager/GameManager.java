@@ -126,9 +126,8 @@ public class GameManager {
             gameScoreboard.updateScore("라운드", currentRound);
         }
 
-        String partyInfo = (party != null) ? "Party " + party.getId() : "All Players";
+        String partyInfo = (party != null) ? "Party " + party.getAdmin() : "All Players";
         plugin.getLogger().info("Game started at round " + currentRound + " for " + partyInfo);
-
         startPreparationPhase();
     }
 
