@@ -25,6 +25,9 @@ import java.util.stream.Collectors;
 
 public class PlayerPartyGUI implements Listener {
 
+    // 사용되지 않으므로 제거
+    // private static final Material[] CONCRETE_COLORS = { ... };
+
     public static void openListGUI(Player player) {
         Component title = Component.text("👥 파티 목록").color(NamedTextColor.DARK_PURPLE).decorate(TextDecoration.BOLD);
         Inventory inv = Bukkit.createInventory(null, 54, title);
@@ -83,7 +86,6 @@ public class PlayerPartyGUI implements Listener {
 
         boolean isPlayerAdmin = party.isAdmin(player.getUniqueId());
 
-        // 1. 방장을 맨 앞으로 오도록 멤버 목록 재정렬
         List<UUID> sortedMembers = new ArrayList<>();
         UUID adminUuid = party.getAdmin();
         sortedMembers.add(adminUuid);
@@ -93,8 +95,7 @@ public class PlayerPartyGUI implements Listener {
             }
         }
 
-        // 2. [2,2] 위치부터 아이템 배치 시작
-        int slot = 10; // 인덱스 10은 [2,2] 위치
+        int slot = 10;
         for (UUID memberUuid : sortedMembers) {
             ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) skull.getItemMeta();
@@ -112,20 +113,19 @@ public class PlayerPartyGUI implements Listener {
 
                 List<Component> lore = new ArrayList<>();
                 if (isPlayerAdmin && !isThisMemberAdmin) {
-                    lore.add(Component.text("§e클릭하여 방장 위임"));
+                    lore.add(Component.text("§e좌클릭: 방장 위임"));
+                    lore.add(Component.text("§c우클릭: 추방"));
                 }
                 meta.lore(lore);
                 skull.setItemMeta(meta);
             }
             inv.setItem(slot, skull);
 
-            // 3. 다음 슬롯으로 이동 (2-8열까지만 사용)
             slot++;
-            if (slot % 9 == 8) slot += 2; // 8번째 열에 도달하면 다음 줄 2번째 열로 이동
-            if (slot > 44) break; // GUI 영역을 벗어나지 않도록 방지
+            if (slot % 9 == 8) slot += 2;
+            if (slot > 44) break;
         }
 
-        // ... (기존 버튼 코드)
         ItemStack leaveBtn = new ItemStack(Material.GRAY_CONCRETE);
         ItemMeta leaveMeta = leaveBtn.getItemMeta();
         if (leaveMeta != null) {
@@ -177,7 +177,7 @@ public class PlayerPartyGUI implements Listener {
                 PartyManager pm = PartyManager.getInstance();
 
                 if (title.contains("파티 목록")) {
-                    if (slot == 45) { // 파티 생성 버튼
+                    if (slot == 45) {
                         if (pm.getPartyByPlayer(player.getUniqueId()) != null) {
                             player.sendMessage("§c이미 파티에 속해 있습니다.");
                             return;
@@ -185,7 +185,7 @@ public class PlayerPartyGUI implements Listener {
                         pm.createParty(player);
                         player.sendMessage("§b성공적으로 파티를 생성했습니다!");
                         openManageGUI(player);
-                    } else if (clickedItem.getType() == Material.PLAYER_HEAD) { // 파티 참가
+                    } else if (clickedItem.getType() == Material.PLAYER_HEAD) {
                         if (pm.getPartyByPlayer(player.getUniqueId()) != null) {
                             player.sendMessage("§c이미 다른 파티에 속해 있습니다.");
                             return;
@@ -213,7 +213,7 @@ public class PlayerPartyGUI implements Listener {
 
                     boolean isAdmin = party.isAdmin(player.getUniqueId());
 
-                    if (clickedItem.getType() == Material.PLAYER_HEAD) { // 방장 위임 로직
+                    if (clickedItem.getType() == Material.PLAYER_HEAD) {
                         if (isAdmin && clickedItem.hasItemMeta()) {
                             NamespacedKey key = new NamespacedKey(plugin, "party_member_uuid");
                             var container = clickedItem.getItemMeta().getPersistentDataContainer();
@@ -222,26 +222,30 @@ public class PlayerPartyGUI implements Listener {
                                 UUID targetUuid = UUID.fromString(Objects.requireNonNull(targetUuidStr));
 
                                 if (!player.getUniqueId().equals(targetUuid)) {
-                                    pm.delegateAdmin(player.getUniqueId(), targetUuid);
+                                    if (event.isLeftClick()) {
+                                        pm.delegateAdmin(player.getUniqueId(), targetUuid);
+                                    } else if (event.isRightClick()) {
+                                        pm.kickMember(player.getUniqueId(), targetUuid);
+                                    }
                                 }
                             }
                         }
-                        return; // 머리 클릭은 위임 로직만 처리하고 종료
+                        return;
                     }
 
                     switch (slot) {
-                        case 46: // Leave
+                        case 46:
                             pm.leaveParty(player);
                             openListGUI(player);
                             break;
-                        case 49: // Disband
+                        case 49:
                             if (isAdmin) {
                                 pm.disbandParty(party.getAdmin());
                             } else {
                                 player.sendMessage("§c권한이 없습니다. 방장만 파티를 해체할 수 있습니다.");
                             }
                             break;
-                        case 52: // Start
+                        case 52:
                             if (isAdmin) {
                                 player.sendMessage("§a게임을 시작합니다!");
                                 player.closeInventory();

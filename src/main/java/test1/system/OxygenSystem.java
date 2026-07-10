@@ -66,10 +66,12 @@ public class OxygenSystem {
     }
 
     public void setOxygenLevel(Player player, int level) {
-        oxygenLevels.put(player.getUniqueId(), Math.max(0, Math.min(MAX_OXYGEN, level)));
+        if (!isEnabled) return; // 시스템이 비활성화된 경우 설정하지 않음
+        oxygenLevels.put(player.getUniqueId(), Math.clamp(level, 0, MAX_OXYGEN));
     }
 
     public int getOxygenLevel(Player player) {
+        if (!isEnabled) return MAX_OXYGEN; // 시스템이 비활성화된 경우 항상 최대 산소량 반환
         return oxygenLevels.getOrDefault(player.getUniqueId(), MAX_OXYGEN);
     }
 
@@ -109,7 +111,7 @@ public class OxygenSystem {
             }
         } else {
             if (currentOxygen > 0) {
-                // [신규] 산소 필터 효과: 50% 확률로 산소 감소 방지 (0.5배율)
+                // 산소 필터 효과: 50% 확률로 산소 감소 방지 (0.5배율)
                 boolean hasFilter = player.getInventory().containsAtLeast(CustomItem.OXYGEN_FILTER, 1);
                 if (!hasFilter || random.nextBoolean()) {
                     currentOxygen--;

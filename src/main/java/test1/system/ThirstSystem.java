@@ -112,7 +112,7 @@ public class ThirstSystem implements Listener {
     }
 
     public void setThirstLevel(Player player, int level) {
-        thirstLevels.put(player.getUniqueId(), Math.max(0, Math.min(MAX_THIRST, level)));
+        thirstLevels.put(player.getUniqueId(), Math.clamp(level, 0, MAX_THIRST));
     }
 
     private void resetThirst(Player player) {

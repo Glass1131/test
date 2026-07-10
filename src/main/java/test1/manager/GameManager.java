@@ -1,5 +1,6 @@
 package test1.manager;
 
+import org.bukkit.entity.*;
 import test1.item.CustomItem;
 import test1.party.Party;
 import test1.MyPlugin;
@@ -9,17 +10,15 @@ import net.kyori.adventure.title.Title;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
-import org.bukkit.entity.Bogged;
-import org.bukkit.entity.Creature;
-import org.bukkit.entity.Item;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Scoreboard;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Duration;
 import java.util.*;
 
@@ -38,7 +37,8 @@ public class GameManager {
     private final Set<UUID> survivors = new HashSet<>();
     private final Set<UUID> zombiePlayers = new HashSet<>();
 
-    private Party currentParty = null;
+    // 사용되지 않으므로 제거
+    // private Party currentParty = null;
 
     private int preparationTimeSeconds;
     private long roundEndDelayTicks;
@@ -71,7 +71,6 @@ public class GameManager {
         }
     }
 
-    //외부에서 특정 보스 소환을 요청할 때 사용
     public void spawnBoss(Location location, String type, int round) {
         if (mobSpawner != null) {
             mobSpawner.spawnSpecificBoss(location, type, round);
@@ -88,17 +87,12 @@ public class GameManager {
         zombiePlayers.clear();
 
         if (party != null) {
-            this.currentParty = party;
             for (UUID uuid : party.getMembers()) {
                 Player p = Bukkit.getPlayer(uuid);
                 if (p != null && p.isOnline()) {
                     survivors.add(uuid);
-                    double maxHealth = 20.0;
                     AttributeInstance attr = p.getAttribute(Attribute.MAX_HEALTH);
-                    if (attr != null) {
-                        maxHealth = attr.getValue();
-                    }
-                    p.setHealth(maxHealth);
+                    if (attr != null) p.setHealth(attr.getValue());
                     p.setFoodLevel(20);
                 }
             }
@@ -116,18 +110,15 @@ public class GameManager {
         gameInProgress = true;
         currentRound = startRound;
         gameMonsters.clear();
-
-        if (plugin.getOxygenSystem() != null) {
-            plugin.getOxygenSystem().setEnabled(false);
-        }
+        plugin.setSystemsEnabled(true);
 
         if (gameScoreboard != null) {
             gameScoreboard.applyToAllPlayers();
             gameScoreboard.updateScore("라운드", currentRound);
         }
 
-        String partyInfo = (party != null) ? "Party " + party.getAdmin() : "All Players";
-        plugin.getLogger().info("Game started at round " + currentRound + " for " + partyInfo);
+        String partyInfo = (party != null && party.getAdmin() != null) ? "Party " + Bukkit.getOfflinePlayer(party.getAdmin()).getName() : "All Players";
+        plugin.getLogger().info("Game started at round " + startRound + " for " + partyInfo);
         startPreparationPhase();
     }
 
@@ -141,59 +132,39 @@ public class GameManager {
 
     public void stopGame() {
         if (!gameInProgress) return;
-
         gameInProgress = false;
-
         cancelAllGameTasks();
         removeGameEntities();
         cleanupGameDrops();
         resetPlayerStates();
-
         survivors.clear();
         zombiePlayers.clear();
-        currentParty = null;
-
-        if (plugin.getOxygenSystem() != null) {
-            plugin.getOxygenSystem().setEnabled(false);
-        }
-
+        plugin.setSystemsEnabled(false);
         World world = Bukkit.getWorld(MyPlugin.GAME_WORLD_NAME);
         if (world != null) {
             world.setStorm(false);
             world.setThundering(false);
         }
-
         plugin.getLogger().info("Game stopped!");
     }
 
     public void handlePlayerDeath(Player player) {
         if (!gameInProgress || !survivors.contains(player.getUniqueId())) return;
-
         survivors.remove(player.getUniqueId());
-
         if (!survivors.isEmpty()) {
             zombiePlayers.add(player.getUniqueId());
-
-            Title title = Title.title(
-                    Component.text("감염되었습니다!", NamedTextColor.DARK_GREEN),
-                    Component.text("생존자를 공격하세요.", NamedTextColor.GREEN),
-                    Title.Times.times(Duration.ofMillis(500), Duration.ofMillis(3000), Duration.ofMillis(1000))
-            );
+            Title title = Title.title(Component.text("감염되었습니다!", NamedTextColor.DARK_GREEN), Component.text("생존자를 공격하세요.", NamedTextColor.GREEN), Title.Times.times(Duration.ofMillis(500), Duration.ofMillis(3000), Duration.ofMillis(1000)));
             player.showTitle(title);
-
             player.playerListName(Component.text(player.getName(), NamedTextColor.GREEN));
-
             Bukkit.broadcast(Component.text("🧟 " + player.getName() + "님이 감염되었습니다! 생존자들을 공격합니다!", NamedTextColor.RED));
-
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline()) {
                     player.spigot().respawn();
-                    player.getInventory().setHelmet(new org.bukkit.inventory.ItemStack(org.bukkit.Material.ZOMBIE_HEAD));
+                    player.getInventory().setHelmet(new ItemStack(Material.ZOMBIE_HEAD));
                     player.sendMessage(Component.text("당신은 좀비가 되었습니다! 생존자를 공격하세요.", NamedTextColor.DARK_RED));
                 }
             }, 10L);
-        }
-        else {
+        } else {
             Bukkit.broadcast(Component.text("❌ 모든 생존자가 전멸했습니다! 게임 종료.", NamedTextColor.RED));
             stopGame();
         }
@@ -207,22 +178,23 @@ public class GameManager {
         World world = Bukkit.getWorld(MyPlugin.GAME_WORLD_NAME);
         if (world == null) return;
 
-        List<org.bukkit.inventory.ItemStack> customItems = Arrays.asList(
-                CustomItem.ZOMBIE_POWER, CustomItem.D_SWORD, CustomItem.D_HELMET,
-                CustomItem.D_CHESTPLATE, CustomItem.D_LEGGINGS, CustomItem.D_BOOTS,
-                CustomItem.DARK_CORE, CustomItem.DARK_WEAPON, CustomItem.SCULK,
-                CustomItem.SCULK_VEIN, CustomItem.SCULK_SENSOR, CustomItem.SILENCE_TEMPLATE,
-                CustomItem.AMETHYST_SHARD, CustomItem.CALIBRATED_SCULK_SENSOR,
-                CustomItem.STICKY_SLIME, CustomItem.OXYGEN_FILTER
-        );
+        List<ItemStack> customItems = new ArrayList<>();
+        for (Field field : CustomItem.class.getFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.getType() == ItemStack.class) {
+                try {
+                    customItems.add((ItemStack) field.get(null));
+                } catch (IllegalAccessException e) {
+                    plugin.getLogger().warning("CustomItem 필드 접근 실패: " + field.getName());
+                }
+            }
+        }
 
-        for (org.bukkit.entity.Entity entity : world.getEntities()) {
+        for (Entity entity : world.getEntities()) {
             if (entity instanceof org.bukkit.entity.AbstractArrow) {
                 entity.remove();
-            }
-            else if (entity instanceof Item itemEntity) {
-                org.bukkit.inventory.ItemStack stack = itemEntity.getItemStack();
-                for (org.bukkit.inventory.ItemStack custom : customItems) {
+            } else if (entity instanceof Item itemEntity) {
+                ItemStack stack = itemEntity.getItemStack();
+                for (ItemStack custom : customItems) {
                     if (custom != null && stack.isSimilar(custom)) {
                         itemEntity.remove();
                         break;
@@ -233,21 +205,13 @@ public class GameManager {
     }
 
     private void cancelAllGameTasks() {
-        if (preparationTask != null && !preparationTask.isCancelled()) {
-            preparationTask.cancel();
-            preparationTask = null;
-        }
-        if (roundEndTask != null && !roundEndTask.isCancelled()) {
-            roundEndTask.cancel();
-            roundEndTask = null;
-        }
-        if (mobSpawner != null) {
-            mobSpawner.stopSpawning();
-        }
-        if (entityCountUpdateTask != null && !entityCountUpdateTask.isCancelled()) {
-            entityCountUpdateTask.cancel();
-            entityCountUpdateTask = null;
-        }
+        if (preparationTask != null) preparationTask.cancel();
+        if (roundEndTask != null) roundEndTask.cancel();
+        if (mobSpawner != null) mobSpawner.stopSpawning();
+        if (entityCountUpdateTask != null) entityCountUpdateTask.cancel();
+        preparationTask = null;
+        roundEndTask = null;
+        entityCountUpdateTask = null;
     }
 
     private void resetPlayerStates() {
@@ -263,26 +227,20 @@ public class GameManager {
     }
 
     private void startPreparationPhase() {
-        if (preparationTask != null && !preparationTask.isCancelled()) {
-            preparationTask.cancel();
-        }
+        cancelAllGameTasks(); // Ensure no old tasks are running
         preparationTask = new BukkitRunnable() {
             int timeLeft = preparationTimeSeconds;
             @Override
             public void run() {
                 if (!gameInProgress) {
                     cancel();
-                    preparationTask = null;
                     return;
                 }
                 if (timeLeft >= 1) {
-                    if (gameScoreboard != null) {
-                        gameScoreboard.updateScore("준비 시간", timeLeft);
-                    }
+                    if (gameScoreboard != null) gameScoreboard.updateScore("준비 시간", timeLeft);
                     timeLeft--;
                 } else {
                     cancel();
-                    preparationTask = null;
                     startGameRound();
                 }
             }
@@ -290,15 +248,12 @@ public class GameManager {
     }
 
     public void skipPreparation() {
-        if (preparationTask != null && !preparationTask.isCancelled()) {
+        if (preparationTask != null) {
             preparationTask.cancel();
             preparationTask = null;
             plugin.getLogger().info("Skipping preparation phase...");
-
             if (gameInProgress) {
-                if (gameScoreboard != null) {
-                    gameScoreboard.updateScore("준비 시간", 0);
-                }
+                if (gameScoreboard != null) gameScoreboard.updateScore("준비 시간", 0);
                 startGameRound();
             }
         }
@@ -306,38 +261,24 @@ public class GameManager {
 
     private void startGameRound() {
         if (!gameInProgress) return;
-
         if (gameScoreboard != null) {
             gameScoreboard.updateScore("라운드", currentRound);
             gameScoreboard.updateScore("준비 시간", 0);
         }
-
-        if (currentRound % 3 == 0) {
-            World world = Bukkit.getWorld(MyPlugin.GAME_WORLD_NAME);
-            if (world != null) {
-                int weatherType = random.nextInt(3);
-                switch (weatherType) {
-                    case 0:
-                        world.setStorm(false);
-                        world.setThundering(false);
-                        Bukkit.broadcast(Component.text("☀ 날씨가 맑아집니다.", NamedTextColor.YELLOW));
-                        break;
-                    case 1:
-                        world.setStorm(true);
-                        world.setThundering(false);
-                        Bukkit.broadcast(Component.text("🌧 비(또는 눈)가 내리기 시작합니다.", NamedTextColor.BLUE));
-                        break;
-                    case 2:
-                        world.setStorm(true);
-                        world.setThundering(true);
-                        Bukkit.broadcast(Component.text("⚡ 폭풍이 몰아칩니다!", NamedTextColor.DARK_PURPLE));
-                        break;
-                }
-            }
+        World world = Bukkit.getWorld(MyPlugin.GAME_WORLD_NAME);
+        if (world != null && currentRound % 3 == 0) {
+            int weatherType = random.nextInt(3);
+            world.setStorm(weatherType > 0);
+            world.setThundering(weatherType == 2);
+            String weatherMsg = switch (weatherType) {
+                case 0 -> "☀ 날씨가 맑아집니다.";
+                case 1 -> "🌧 비(또는 눈)가 내리기 시작합니다.";
+                case 2 -> "⚡ 폭풍이 몰아칩니다!";
+                default -> "";
+            };
+            Bukkit.broadcast(Component.text(weatherMsg, NamedTextColor.YELLOW));
         }
-
-        Bukkit.broadcast(Component.text("🧟 게임 시작! 라운드 " + currentRound).color(NamedTextColor.GREEN));
-
+        Bukkit.broadcast(Component.text("🧟 게임 시작! 라운드 " + currentRound, NamedTextColor.GREEN));
         int oxygenStartRound = plugin.getConfig().getInt("biomes.swamp.oxygen-start-round", 5);
         if (currentRound == oxygenStartRound && plugin.getOxygenSystem() != null && !plugin.getOxygenSystem().isEnabled()) {
             plugin.getOxygenSystem().setEnabled(true);
@@ -347,56 +288,35 @@ public class GameManager {
                 p.playSound(p.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 1.0f, 0.5f);
             }
         }
-
-        int extraHealth = 0;
-        if (healthIncreasePerXRounds > 0) {
-            extraHealth = (currentRound / healthIncreasePerXRounds) * healthIncreaseAmount;
-        }
-
+        int extraHealth = (healthIncreasePerXRounds > 0) ? (currentRound / healthIncreasePerXRounds) * healthIncreaseAmount : 0;
         gameMonsters.clear();
-
         int bossInterval = plugin.getConfig().getInt("biomes.swamp.boss-round-interval", 10);
         boolean isBossRound = (currentRound % bossInterval == 0);
-
-        if (mobSpawner != null) {
-            mobSpawner.startSpawning(currentRound, extraHealth, isBossRound);
-        }
-
+        if (mobSpawner != null) mobSpawner.startSpawning(currentRound, extraHealth, isBossRound);
         startEntityCountUpdateTask();
     }
 
     private void endRound() {
-        if (roundEndTask != null && !roundEndTask.isCancelled()) {
-            roundEndTask.cancel();
-        }
+        if (roundEndTask != null) roundEndTask.cancel();
         roundEndTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!gameInProgress) {
-                roundEndTask = null;
-                return;
-            }
-            Bukkit.broadcast(Component.text("라운드 " + currentRound + " 종료! 다음 라운드를 준비하세요.").color(NamedTextColor.YELLOW));
+            if (!gameInProgress) return;
+            Bukkit.broadcast(Component.text("라운드 " + currentRound + " 종료! 다음 라운드를 준비하세요.", NamedTextColor.YELLOW));
             currentRound++;
-            roundEndTask = null;
             startPreparationPhase();
         }, this.roundEndDelayTicks);
     }
 
     private void startEntityCountUpdateTask() {
-        if (entityCountUpdateTask != null && !entityCountUpdateTask.isCancelled()) {
-            entityCountUpdateTask.cancel();
-        }
+        if (entityCountUpdateTask != null) entityCountUpdateTask.cancel();
         entityCountUpdateTask = new BukkitRunnable() {
             @Override
             public void run() {
                 if (!gameInProgress) {
                     cancel();
-                    entityCountUpdateTask = null;
                     return;
                 }
-
                 World world = Bukkit.getWorld(MyPlugin.GAME_WORLD_NAME);
                 boolean isStorming = world != null && world.hasStorm();
-
                 Iterator<LivingEntity> iterator = gameMonsters.iterator();
                 int aliveMonsterCount = 0;
                 while (iterator.hasNext()) {
@@ -405,29 +325,17 @@ public class GameManager {
                         iterator.remove();
                     } else {
                         aliveMonsterCount++;
-
                         if (monster instanceof Bogged && isStorming) {
                             double temp = monster.getLocation().getBlock().getTemperature();
-                            if (temp < 0.15) {
-                                monster.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 0, false, false));
-                            } else {
-                                monster.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 40, 0, false, false));
-                            }
+                            if (temp < 0.15) monster.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 0, false, false));
+                            else monster.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 40, 0, false, false));
                         }
-
-                        if (monster instanceof Creature creature) {
-                            updateMonsterTarget(creature);
-                        }
+                        if (monster instanceof Creature creature) updateMonsterTarget(creature);
                     }
                 }
-
-                if (gameScoreboard != null) {
-                    gameScoreboard.updateScore("남은 몹", aliveMonsterCount);
-                }
-
-                if (aliveMonsterCount == 0 && gameInProgress) {
+                if (gameScoreboard != null) gameScoreboard.updateScore("남은 몹", aliveMonsterCount);
+                if (aliveMonsterCount == 0) {
                     cancel();
-                    entityCountUpdateTask = null;
                     endRound();
                 }
             }
@@ -436,30 +344,20 @@ public class GameManager {
 
     private void updateMonsterTarget(Creature creature) {
         LivingEntity currentTarget = creature.getTarget();
-
         if (currentTarget instanceof Player playerTarget) {
-            boolean isInvalidTarget = zombiePlayers.contains(playerTarget.getUniqueId())
-                    || playerTarget.isDead()
-                    || playerTarget.getGameMode() == GameMode.SPECTATOR;
-
-            if (!isInvalidTarget) {
-                return;
-            }
+            boolean isInvalidTarget = zombiePlayers.contains(playerTarget.getUniqueId()) || playerTarget.isDead() || playerTarget.getGameMode() == GameMode.SPECTATOR;
+            if (!isInvalidTarget) return;
         }
-
-        Player nearestPlayer = getNearestPlayer(creature);
-        creature.setTarget(nearestPlayer);
+        creature.setTarget(getNearestPlayer(creature));
     }
 
     private Player getNearestPlayer(LivingEntity entity) {
         Player closestPlayer = null;
         double closestDistanceSq = Double.MAX_VALUE;
         Location entityLocation = entity.getLocation();
-
         for (UUID uuid : survivors) {
             Player player = Bukkit.getPlayer(uuid);
-            if (player != null && !player.isDead() && player.getWorld().equals(entityLocation.getWorld())
-                    && player.getGameMode() != GameMode.SPECTATOR) {
+            if (player != null && !player.isDead() && player.getWorld().equals(entityLocation.getWorld()) && player.getGameMode() != GameMode.SPECTATOR) {
                 double distanceSq = player.getLocation().distanceSquared(entityLocation);
                 if (distanceSq < closestDistanceSq) {
                     closestDistanceSq = distanceSq;
@@ -484,23 +382,13 @@ public class GameManager {
 
     public void removeGameEntities() {
         for (LivingEntity monster : new HashSet<>(gameMonsters)) {
-            if (monster != null && monster.isValid()) {
-                monster.remove();
-            }
+            if (monster != null && monster.isValid()) monster.remove();
         }
         gameMonsters.clear();
         plugin.getLogger().info("All game monsters removed by GameManager.");
     }
 
-    public boolean isGameInProgress() {
-        return gameInProgress;
-    }
-
-    public int getCurrentRound() {
-        return currentRound;
-    }
-
-    public Set<LivingEntity> getGameMonsters() {
-        return Collections.unmodifiableSet(gameMonsters);
-    }
+    public boolean isGameInProgress() { return gameInProgress; }
+    public int getCurrentRound() { return currentRound; }
+    public Set<LivingEntity> getGameMonsters() { return Collections.unmodifiableSet(gameMonsters); }
 }

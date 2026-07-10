@@ -80,11 +80,6 @@ public class ZombieDropListener implements Listener {
 
         // 좀비 드롭 업데이트
         if (entity instanceof Zombie) {
-            if (plugin.isProbabilityTestMode()) {
-                if (biome == Biome.DEEP_DARK) chance = 0.0;
-                else chance = 0.62;
-            }
-
             // 좀비의 흔적 (8%)
             if (random.nextDouble() < 0.08) {
                 event.getDrops().add(CustomItem.ZOMBIE_TRACE.clone());

@@ -87,8 +87,8 @@ public class SpearZombie implements Listener {
     public void onZombieSpawn(CreatureSpawnEvent event) {
         if (event.getEntityType() != EntityType.ZOMBIE) return;
 
-        boolean shouldSpawn = plugin.isProbabilityTestMode() || random.nextDouble() < SPAWN_CHANCE;
-        if (shouldSpawn) {
+        double effectiveProbability = plugin.getEffectiveProbability("spear_zombie", SPAWN_CHANCE);
+        if (random.nextDouble() < effectiveProbability) {
             makeSpearZombie((Zombie) event.getEntity());
         }
     }
@@ -153,7 +153,7 @@ public class SpearZombie implements Listener {
 
         zombie.swingMainHand();
         zombie.getWorld().playSound(zombie.getLocation(), Sound.ENTITY_ZOMBIE_ATTACK_IRON_DOOR, 1.0f, 0.5f);
-        zombie.getWorld().spawnParticle(Particle.CLOUD, zombie.getLocation(), 10, 0.5, 0.5, 0.5, 0.1);
+        zombie.getWorld().spawnParticle(Particle.CLOUD, zombie.getLocation(), 10, 0.5, 0.5, 0.1);
 
         new BukkitRunnable() {
             int tick = 0;

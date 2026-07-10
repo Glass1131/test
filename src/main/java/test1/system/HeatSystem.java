@@ -25,16 +25,29 @@ public class HeatSystem {
     private final JavaPlugin plugin;
     private final Map<Player, Integer> temperatureLevels = new HashMap<>();
     private final String[] temperatureStates = {"매우 추움", "추움", "정상", "더움", "매우 더움"};
+    private boolean enabled = true;
 
     public HeatSystem(JavaPlugin plugin) {
         this.plugin = plugin;
         startTemperatureTask();
     }
 
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+        if (!enabled) {
+            temperatureLevels.clear();
+        }
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     private void startTemperatureTask() {
         new BukkitRunnable() {
             @Override
             public void run() {
+                if (!enabled) return;
                 for (Player player : Bukkit.getOnlinePlayers()) {
                     if (player.getGameMode() == GameMode.SPECTATOR) {
                         temperatureLevels.remove(player);
@@ -142,13 +155,14 @@ public class HeatSystem {
     }
 
     public String getTemperatureState(Player player) {
+        if (!enabled) return "N/A";
         int temp = temperatureLevels.getOrDefault(player, DEFAULT_TEMPERATURE);
         if (temp > 2) return "매우 더움" + "!".repeat(Math.min(3, temp - 2));
         if (temp < -2) return "매우 추움" + "!".repeat(Math.min(3, (-2) - temp));
 
         // [수정] 불필요한 idx >= 0 검사 단순화
         int idx = temp + 2;
-        if (idx >= 0 && idx < temperatureStates.length) {
+        if (idx < temperatureStates.length) {
             return temperatureStates[idx];
         }
         return "정상";
